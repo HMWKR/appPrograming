@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>02_pydantic — dataclass vs Pydantic ultradetail 해설</title>
+<style>
+  :root{--fg:#1f2328;--muted:#656d76;--bg:#ffffff;--accent:#0969da;--code-bg:#f6f8fa;--code-border:#d0d7de;--info:#dbeafe;--info-br:#2563eb;--warn:#fef3c7;--warn-br:#d97706;--danger:#fee2e2;--danger-br:#dc2626;--tip:#dcfce7;--tip-br:#16a34a;--kw:#cf222e;--str:#0a3069;--com:#6e7781;--num:#0550ae;--fn:#8250df;}
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{font-family:"Noto Sans KR","Segoe UI",-apple-system,sans-serif;color:var(--fg);background:var(--bg);line-height:1.75;margin:0;padding:0;font-size:16px;}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
+  h1{font-size:2.1rem;margin:0 0 8px;border-bottom:3px solid var(--accent);padding-bottom:12px;}
+  h2{font-size:1.55rem;margin:48px 0 12px;border-left:5px solid var(--accent);padding-left:12px;}
+  h3{font-size:1.22rem;margin:28px 0 10px;color:#0550ae;}
+  h4{font-size:1.05rem;margin:20px 0 8px;}
+  .meta{color:var(--muted);font-size:0.92rem;margin-bottom:32px;}
+  code{font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:0.92em;border:1px solid var(--code-border);}
+  pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;font-size:0.88rem;line-height:1.55;}
+  pre code{background:none;padding:0;border:none;}
+  .kw{color:var(--kw);font-weight:600;} .str{color:var(--str);} .com{color:var(--com);font-style:italic;} .num{color:var(--num);} .fn{color:var(--fn);}
+  .callout{padding:14px 18px;border-radius:8px;margin:16px 0;border-left:5px solid;font-size:0.96rem;}
+  .callout.info{background:var(--info);border-color:var(--info-br);}
+  .callout.warn{background:var(--warn);border-color:var(--warn-br);}
+  .callout.danger{background:var(--danger);border-color:var(--danger-br);}
+  .callout.tip{background:var(--tip);border-color:var(--tip-br);}
+  .callout b{display:block;margin-bottom:4px;}
+  .toc{background:#f6f8fa;border:1px solid var(--code-border);border-radius:8px;padding:18px 24px;margin:24px 0 40px;}
+  .toc ol{margin:0;padding-left:22px;} .toc li{margin:4px 0;}
+  table{border-collapse:collapse;margin:16px 0;font-size:0.94rem;width:100%;}
+  th,td{border:1px solid var(--code-border);padding:8px 12px;text-align:left;vertical-align:top;} th{background:#f6f8fa;}
+  .cell{border:1px solid var(--code-border);border-radius:10px;margin:28px 0;overflow:hidden;}
+  .cell-hdr{background:#eaeef2;padding:8px 14px;font-size:0.85rem;color:var(--muted);border-bottom:1px solid var(--code-border);display:flex;justify-content:space-between;}
+  .cell-hdr .type{font-weight:600;color:var(--accent);}
+  .cell-body{padding:16px 20px;}
+  .cell-body pre{margin:0 0 14px;}
+  .explain{margin:10px 0;} .explain b{color:var(--accent);}
+  .footer{margin-top:64px;font-size:0.85rem;color:var(--muted);text-align:center;border-top:1px solid var(--code-border);padding-top:16px;}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .compare > div{border:1px solid var(--code-border);border-radius:8px;padding:12px 16px;background:#fafbfc;}
+  .compare h4{margin-top:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>02_pydantic.ipynb — 데이터 검증은 dataclass가 아니라 Pydantic이 한다</h1>
+<p class="meta">06주차 · week6 · 전제 지식: 파이썬 클래스, 타입 힌트 기본. · 총 6개 셀.</p>
+
+<div class="toc">
+<b>목차</b>
+<ol>
+  <li><a href="#why">왜 Pydantic을 배우는가</a></li>
+  <li><a href="#cells">셀 단위 해설</a></li>
+  <li><a href="#compare">dataclass vs Pydantic 비교표</a></li>
+  <li><a href="#coercion">타입 강제 변환(coercion)의 규칙</a></li>
+  <li><a href="#validation-error">ValidationError 구조</a></li>
+  <li><a href="#fastapi">FastAPI와의 연결</a></li>
+  <li><a href="#deepdive">심화: Field, validator, model_dump</a></li>
+  <li><a href="#pitfalls">함정 3가지</a></li>
+  <li><a href="#exercises">자체 점검 문제</a></li>
+</ol>
+</div>
+
+<h2 id="why">1. 왜 Pydantic을 배우는가</h2>
+<p>파이썬의 타입 힌트는 <b>실행 시점에 강제되지 않는다</b>. 즉 <code>id: int</code>라고 써놓아도 누군가 문자열을 넣어버리면 그대로 흘러간다. 작은 스크립트면 상관없지만 API·설정 로더·CLI 파라미터처럼 <em>외부에서 들어오는 데이터</em>를 다룰 때는 이 허술함이 치명적이다.</p>
+<p><b>Pydantic</b>은 "타입 힌트를 실제 검증 규칙으로 승격시키는" 라이브러리다. 선언한 필드와 조건을 위반하면 <code>ValidationError</code>를 던지고, 변환 가능한 타입은 <em>자동으로 강제 변환</em>한다. 이 특성 덕분에 FastAPI는 <code>item: Item</code>이라는 타입 힌트 한 줄만으로 요청 JSON의 파싱·검증·422 에러 응답을 전부 자동화한다.</p>
+<div class="callout info"><b>핵심 공식</b>
+dataclass = "타입은 힌트일 뿐" / Pydantic BaseModel = "타입은 규칙이다"</div>
+
+<h2 id="cells">2. 셀 단위 해설</h2>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 0 — dataclass는 런타임 검사를 안 한다</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code><span class="kw">import</span> dataclasses
+
+<span class="com">## 1. dataclass 예제</span>
+<span class="kw">@dataclasses.dataclass</span>
+<span class="kw">class</span> <span class="fn">DataUser</span>:
+    <span class="str">"""타입 힌트를 사용하지만, 런타임 유효성 검사는 없음."""</span>
+    id: <span class="kw">int</span>
+    name: <span class="kw">str</span>
+    is_active: <span class="kw">bool</span> = <span class="kw">True</span>
+
+<span class="com"># (1) 올바른 데이터</span>
+user_data = DataUser(id=<span class="num">1</span>, name=<span class="str">"Alice"</span>)
+print(f<span class="str">"✅ 유효한 데이터 (정상): {user_data}"</span>)
+
+<span class="com"># (2) 유효하지 않은 데이터 (str 대신 int를 할당)</span>
+<span class="com"># dataclass는 오류를 발생시키지 않고 값을 그대로 저장함</span>
+invalid_user = DataUser(id=<span class="num">2</span>, name=<span class="num">123</span>)
+print(f<span class="str">"⚠️ 유효하지 않은 데이터 (저장됨): {invalid_user}"</span>)</code></pre>
+<div class="explain"><b>무엇을</b>: <code>@dataclasses.dataclass</code>로 3개 필드를 가진 <code>DataUser</code>를 정의하고, <em>잘못된 타입</em>(name이 정수 <code>123</code>)을 일부러 넣어 본다.</div>
+<div class="explain"><b>왜 이렇게 쓰는지</b>: 학생이 첫 번째로 깨달아야 할 사실이 <em>"파이썬 타입 힌트는 기본적으로 검사하지 않는다"</em>이기 때문이다. <code>DataUser(id=2, name=123)</code>은 <u>에러 없이</u> 통과한다. 즉 객체 속 <code>name</code>은 정수 123을 그대로 갖게 된다. 이것이 스크립트 레벨에서는 어떤 부작용을 만드는지 스스로 관찰하게 한다.</div>
+<div class="callout warn"><b>dataclass의 정체</b>
+dataclass는 "<code>__init__</code>, <code>__repr__</code>, <code>__eq__</code>를 자동으로 써주는 도우미"일 뿐이다. 타입 힌트는 그 자체로 어떤 실행을 유발하지 않는다. 정적 타입 체커(mypy, pyright)를 <em>별도로</em> 돌려야 이상을 감지한다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 1</span><span class="type">Markdown</span></div>
+<div class="cell-body">
+<blockquote>FastAPI에서는 사용자가 정의한 클래스 자체를 타입으로 사용합니다. 특히 데이터 검증 라이브러리인 Pydantic 모델을 타입 힌트로 지정하면, FastAPI가 자동으로 JSON 데이터를 파싱하고 검증해줍니다.</blockquote>
+<div class="explain">dataclass의 한계를 지적하고, 해결책으로 <b>Pydantic BaseModel</b>을 도입한다는 전환.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 2 — Item 모델과 FastAPI 친화 함수</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code><span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel
+
+<span class="kw">class</span> <span class="fn">Item</span>(BaseModel):
+    name: <span class="kw">str</span>
+    price: <span class="kw">float</span>
+    is_offer: <span class="kw">str</span> | <span class="kw">None</span> = <span class="kw">None</span>   <span class="com"># 원본은 bool | None</span>
+
+<span class="com"># FastAPI에서 이런 식으로 사용하게 됩니다.</span>
+<span class="kw">def</span> <span class="fn">create_item</span>(item: Item):
+    <span class="kw">return</span> {<span class="str">"item_name"</span>: item.name, <span class="str">"item_price"</span>: item.price}</code></pre>
+<div class="explain"><b>무엇을</b>: <code>BaseModel</code>을 상속한 <code>Item</code> 클래스를 정의. 그 타입을 받는 <code>create_item</code> 함수를 준비.</div>
+<div class="explain"><b>왜</b>: FastAPI에서 엔드포인트 파라미터로 Pydantic 모델을 쓰는 <em>실전 모양</em>을 먼저 보여준다. 네트워크 없이도 순수 파이썬으로 동일한 인터페이스가 테스트 가능하다는 점이 중요하다.</div>
+<div class="callout tip"><b>유니온 문법</b>
+<code>X | None</code>은 파이썬 3.10+의 줄임 표현이고, <code>Union[X, None]</code> 또는 <code>Optional[X]</code>와 같다. 셋은 완전히 동일한 타입을 의미한다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 3 — 모델 인스턴스 생성 → 함수 호출</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code>create_item(item=Item(name=<span class="str">"Foo"</span>, price=<span class="num">50.2</span>))</code></pre>
+<div class="explain"><b>무엇을</b>: <code>Item</code> 인스턴스를 생성해 <code>create_item</code>에 넣는다. 결과는 <code>{'item_name': 'Foo', 'item_price': 50.2}</code>.</div>
+<div class="explain"><b>왜</b>: 모델 생성이 <em>즉시 검증</em>을 수행함을 강조한다. <code>name</code>, <code>price</code>가 빠지거나 잘못된 타입이면 이 줄에서 예외가 터진다. FastAPI에서는 같은 로직이 HTTP 422로 전환된다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 4 — PydanticUser: 정상 · 강제 변환 · 실패</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code><span class="kw">from</span> pydantic <span class="kw">import</span> ValidationError
+
+<span class="kw">class</span> <span class="fn">PydanticUser</span>(BaseModel):
+    <span class="str">"""타입 힌트를 사용하며, 런타임에 유효성 검사 및 강제 변환 수행."""</span>
+    id: <span class="kw">int</span>
+    name: <span class="kw">str</span>
+    is_active: <span class="kw">bool</span> = <span class="kw">True</span>
+
+<span class="com"># (1) 올바른 데이터</span>
+p_user_data = PydanticUser(id=<span class="num">1</span>, name=<span class="str">"Bob"</span>)
+print(f<span class="str">"✅ 유효한 데이터 (정상): {p_user_data}"</span>)
+
+<span class="com"># (2) 타입 강제 변환</span>
+p_user_coerce = PydanticUser(id=<span class="str">'2'</span>, name=<span class="str">"Charlie"</span>)
+print(f<span class="str">"🔄 타입 강제 변환 (정상): {p_user_coerce}"</span>)
+
+<span class="com"># (3) 유효성 검사 실패 (bool 아님)</span>
+<span class="kw">try</span>:
+    PydanticUser(id=<span class="num">3</span>, name=<span class="str">"David"</span>, is_active=<span class="str">"not_a_bool"</span>)
+<span class="kw">except</span> ValidationError <span class="kw">as</span> e:
+    print(f<span class="str">"❌ 유효성 검사 실패: \n{e.errors()[0]}"</span>)</code></pre>
+<div class="explain"><b>무엇을</b>: 세 가지 시나리오를 연속 시연.</div>
+<ol>
+  <li><b>정상</b>: 타입 일치 → 그대로 저장.</li>
+  <li><b>강제 변환</b>: <code>id='2'</code> (문자열) → Pydantic이 <u>자동으로 int(2)로 변환</u>. 출력 객체의 id는 진짜 정수 2.</li>
+  <li><b>실패</b>: <code>is_active="not_a_bool"</code> → bool로 해석 불가능하므로 <code>ValidationError</code>. <code>e.errors()[0]</code>은 어느 필드가 왜 잘못됐는지 구조화된 딕셔너리로 알려준다.</li>
+</ol>
+<div class="explain"><b>왜 이렇게 쓰는지</b>: 실무에서는 "숫자로 들어와야 하는 값이 문자열로 도착"하는 일이 흔하다. Pydantic은 <em>안전하게 해석 가능한 변환은 허용</em>하고, <em>애매하거나 위험한 입력은 거절</em>하는 두 축으로 동작한다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 5</span><span class="type">Code (빈 셀)</span></div>
+<div class="cell-body"><div class="explain">학생 연습 공간. 자기 데이터 구조로 BaseModel을 만들어 보라는 의도.</div></div></div>
+
+<h2 id="compare">3. dataclass vs Pydantic 비교표</h2>
+<table>
+<thead><tr><th>항목</th><th>dataclass</th><th>Pydantic BaseModel</th></tr></thead>
+<tbody>
+<tr><td>표준 라이브러리 여부</td><td>예 (<code>dataclasses</code>)</td><td>아니오 (<code>pip install pydantic</code>)</td></tr>
+<tr><td>런타임 타입 검증</td><td>없음</td><td>있음 (엄격+강제 변환)</td></tr>
+<tr><td>잘못된 타입 주입</td><td>조용히 저장</td><td><code>ValidationError</code></td></tr>
+<tr><td>타입 강제 변환</td><td>없음</td><td><code>'2' → 2</code>, <code>'true' → True</code> 등</td></tr>
+<tr><td>JSON 직렬화</td><td>수동 (<code>asdict</code>)</td><td><code>model_dump()</code>, <code>model_dump_json()</code></td></tr>
+<tr><td>기본값·필드 메타</td><td><code>field()</code></td><td><code>Field(...)</code>, 최소/최대/정규식 등</td></tr>
+<tr><td>FastAPI 통합</td><td>지원 제한적</td><td>퍼스트 파티 (요청·응답 모델)</td></tr>
+<tr><td>성능</td><td>매우 빠름(검사 없음)</td><td>v2에서 Rust 코어로 재작성 → 충분히 빠름</td></tr>
+</tbody>
+</table>
+
+<h2 id="coercion">4. 타입 강제 변환(coercion)의 규칙</h2>
+<p>"무엇을 허용하고 무엇을 거절하는가"가 자주 질문된다. 경험적 규칙:</p>
+<ul>
+  <li><b>int</b>: 숫자 문자열(<code>'42'</code>), <code>True/False</code>(→1/0) 허용. <code>'42.5'</code>, <code>'abc'</code> 거절.</li>
+  <li><b>float</b>: 숫자 문자열 허용, <code>int</code> 허용. <code>'abc'</code> 거절.</li>
+  <li><b>bool</b>: <code>True/False</code>와 관습 문자열(<code>'true'/'false'/'1'/'0'/'yes'/'no'</code>) 허용. <code>"not_a_bool"</code>은 거절 → 본 셀의 (3)이 이 규칙에 걸려 실패한다.</li>
+  <li><b>str</b>: 기본적으로 다른 타입을 받지 않는다(엄격). v1에서는 허용했지만 v2에서 엄격해졌다.</li>
+  <li><b>datetime</b>: ISO 8601 문자열(<code>'2026-04-17T12:34'</code>) 자동 파싱.</li>
+</ul>
+<div class="callout warn"><b>엄격 모드</b>
+의도와 다른 변환을 원천 차단하려면 <code>model_config = ConfigDict(strict=True)</code>를 두거나 필드별 <code>Strict</code> 타입을 쓴다. 금융·인증 관련 값은 엄격 모드를 권장.</div>
+
+<h2 id="validation-error">5. ValidationError 구조</h2>
+<p><code>e.errors()</code>는 리스트이며, 각 원소는 아래 키로 구성된다.</p>
+<pre><code>[
+  {
+    <span class="str">"type"</span>: <span class="str">"bool_parsing"</span>,          <span class="com"># 에러 카테고리</span>
+    <span class="str">"loc"</span>:  (<span class="str">"is_active"</span>,),           <span class="com"># 문제가 된 경로(중첩 모델이면 깊어짐)</span>
+    <span class="str">"msg"</span>:  <span class="str">"Input should be a valid boolean ..."</span>,
+    <span class="str">"input"</span>: <span class="str">"not_a_bool"</span>,             <span class="com"># 실제 들어온 값</span>
+    <span class="str">"url"</span>:  <span class="str">"https://errors.pydantic.dev/..."</span>
+  }
+]</code></pre>
+<p>프런트엔드에 응답할 때 <code>loc</code>을 활용해 "어느 필드가 왜 실패했는지"를 화면에 정확히 매핑할 수 있다. FastAPI의 422 응답이 바로 이 구조를 감싼다.</p>
+
+<h2 id="fastapi">6. FastAPI와의 연결</h2>
+<div class="compare">
+<div>
+<h4>Pydantic 없이</h4>
+<pre><code><span class="kw">def</span> <span class="fn">create_user</span>(request):
+    body = json.loads(request.body)
+    <span class="com"># 수동 검증</span>
+    <span class="kw">if</span> <span class="kw">not</span> <span class="kw">isinstance</span>(body.get(<span class="str">'id'</span>), <span class="kw">int</span>):
+        <span class="kw">return</span> <span class="num">400</span>, ...
+    <span class="kw">if</span> <span class="kw">not</span> body.get(<span class="str">'name'</span>):
+        <span class="kw">return</span> <span class="num">400</span>, ...
+    ...</code></pre>
+</div>
+<div>
+<h4>Pydantic + FastAPI</h4>
+<pre><code><span class="kw">@app.post</span>(<span class="str">"/users"</span>)
+<span class="kw">def</span> <span class="fn">create_user</span>(user: PydanticUser):
+    <span class="com"># 여기 도달하면 user는 이미 검증·변환 완료</span>
+    <span class="kw">return</span> user</code></pre>
+</div>
+</div>
+<p>검증·문서화·IDE 자동완성·OpenAPI 스키마가 모두 같은 모델로부터 파생된다. "선언이 곧 문서이자 검증기이자 파서"라는 구조가 FastAPI 생산성의 비밀이다.</p>
+
+<h2 id="deepdive">7. 심화: Field, validator, model_dump</h2>
+<pre><code><span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel, Field, field_validator
+
+<span class="kw">class</span> <span class="fn">Product</span>(BaseModel):
+    sku: <span class="kw">str</span> = Field(pattern=<span class="str">r"^[A-Z]{3}-\d{4}$"</span>)   <span class="com"># 정규식 제약</span>
+    price: <span class="kw">float</span> = Field(gt=<span class="num">0</span>, le=<span class="num">1_000_000</span>)       <span class="com"># 0 초과 100만 이하</span>
+    tags: <span class="kw">list</span>[<span class="kw">str</span>] = Field(default_factory=<span class="kw">list</span>, max_length=<span class="num">5</span>)
+
+    <span class="kw">@field_validator</span>(<span class="str">"sku"</span>)
+    <span class="kw">@classmethod</span>
+    <span class="kw">def</span> <span class="fn">upper_only</span>(<span class="kw">cls</span>, v: <span class="kw">str</span>) -> <span class="kw">str</span>:
+        <span class="kw">return</span> v.upper()
+
+p = Product(sku=<span class="str">"abc-0001"</span>, price=<span class="num">42.5</span>, tags=[<span class="str">"new"</span>])
+p.model_dump()        <span class="com"># dict 변환</span>
+p.model_dump_json()   <span class="com"># 문자열 JSON 변환</span></code></pre>
+<ul>
+  <li><b>Field</b>: 제약(<code>gt/ge/lt/le</code>, <code>min_length/max_length</code>, <code>pattern</code>), 기본값 팩토리, alias, 설명(<code>description</code>) 등을 부여한다.</li>
+  <li><b>field_validator</b>: 필드 단위 후처리/정규화를 선언한다. 이 예시는 SKU를 대문자로 통일.</li>
+  <li><b>model_dump / model_dump_json</b>: v2의 직렬화 공식 메서드. v1의 <code>dict()</code>/<code>json()</code>은 이름이 바뀌었다.</li>
+</ul>
+
+<h2 id="pitfalls">8. 함정 3가지</h2>
+<ol>
+  <li><b>dataclass의 안정감</b>: dataclass만 쓰다 "안 터지니 괜찮다"고 생각하기 쉽지만, 외부 입력을 다루는 순간 검증 부재는 잠재적 결함이 된다. 영역이 확장되면 Pydantic으로 옮기는 것이 안전.</li>
+  <li><b>v1 문법 혼용</b>: 인터넷 예제 중 <code>@validator</code>, <code>.dict()</code>, <code>parse_obj</code>는 v1 API. v2에서는 각각 <code>@field_validator</code>, <code>.model_dump()</code>, <code>.model_validate()</code>로 바뀌었다.</li>
+  <li><b>bool 강제 변환의 의외성</b>: <code>is_active=1</code>은 통과해 <code>True</code>가 된다. 숫자 0/1을 불리언으로 받는 게 곤란하면 <code>StrictBool</code> 또는 <code>strict=True</code>를 써야 한다.</li>
+</ol>
+
+<h2 id="exercises">9. 자체 점검 문제</h2>
+<ol>
+  <li><code>DataUser(id=2, name=123)</code>이 에러를 내지 않는 이유를 한 문장으로.</li>
+  <li><code>PydanticUser(id='2', name='Charlie')</code>이 성공하는 이유를 타입 강제 변환 관점에서 설명.</li>
+  <li><code>ValidationError.errors()[0]</code>의 <code>loc</code>, <code>type</code>, <code>input</code> 키가 각각 어떤 정보를 담는지.</li>
+  <li>Pydantic 모델의 인스턴스를 JSON 문자열로 바꾸려면 어떤 메서드를 쓰나?</li>
+  <li><code>Field(gt=0, le=1_000_000)</code>가 부여하는 제약을 평어로.</li>
+</ol>
+
+<div class="callout tip"><b>한 줄 요약</b>
+타입 힌트만 쓰고 실행시간 보증이 필요하면 <b>Pydantic</b>. 단순 컨테이너로 코드 안쪽에서만 도는 값이면 <b>dataclass</b>로 충분.</div>
+
+<div class="footer">작성: 2026-04-17 · 출처 노트북: <code>06week/week6/02_pydantic.ipynb</code></div>
+</div>
+</body></html>

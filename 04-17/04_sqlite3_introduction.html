@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>04_sqlite3_introduction — SQLite3 CRUD 완전 해설</title>
+<style>
+  :root{--fg:#1f2328;--muted:#656d76;--bg:#ffffff;--accent:#0969da;--code-bg:#f6f8fa;--code-border:#d0d7de;--info:#dbeafe;--info-br:#2563eb;--warn:#fef3c7;--warn-br:#d97706;--danger:#fee2e2;--danger-br:#dc2626;--tip:#dcfce7;--tip-br:#16a34a;--kw:#cf222e;--str:#0a3069;--com:#6e7781;--num:#0550ae;--fn:#8250df;}
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{font-family:"Noto Sans KR","Segoe UI",-apple-system,sans-serif;color:var(--fg);background:var(--bg);line-height:1.75;margin:0;padding:0;font-size:16px;}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
+  h1{font-size:2.1rem;margin:0 0 8px;border-bottom:3px solid var(--accent);padding-bottom:12px;}
+  h2{font-size:1.55rem;margin:48px 0 12px;border-left:5px solid var(--accent);padding-left:12px;}
+  h3{font-size:1.22rem;margin:28px 0 10px;color:#0550ae;}
+  h4{font-size:1.05rem;margin:20px 0 8px;}
+  .meta{color:var(--muted);font-size:0.92rem;margin-bottom:32px;}
+  code{font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:0.92em;border:1px solid var(--code-border);}
+  pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;font-size:0.88rem;line-height:1.55;}
+  pre code{background:none;padding:0;border:none;}
+  .kw{color:var(--kw);font-weight:600;} .str{color:var(--str);} .com{color:var(--com);font-style:italic;} .num{color:var(--num);} .fn{color:var(--fn);}
+  .callout{padding:14px 18px;border-radius:8px;margin:16px 0;border-left:5px solid;font-size:0.96rem;}
+  .callout.info{background:var(--info);border-color:var(--info-br);}
+  .callout.warn{background:var(--warn);border-color:var(--warn-br);}
+  .callout.danger{background:var(--danger);border-color:var(--danger-br);}
+  .callout.tip{background:var(--tip);border-color:var(--tip-br);}
+  .callout b{display:block;margin-bottom:4px;}
+  .toc{background:#f6f8fa;border:1px solid var(--code-border);border-radius:8px;padding:18px 24px;margin:24px 0 40px;}
+  .toc ol{margin:0;padding-left:22px;} .toc li{margin:4px 0;}
+  table{border-collapse:collapse;margin:16px 0;font-size:0.94rem;width:100%;}
+  th,td{border:1px solid var(--code-border);padding:8px 12px;text-align:left;vertical-align:top;} th{background:#f6f8fa;}
+  .cell{border:1px solid var(--code-border);border-radius:10px;margin:28px 0;overflow:hidden;}
+  .cell-hdr{background:#eaeef2;padding:8px 14px;font-size:0.85rem;color:var(--muted);border-bottom:1px solid var(--code-border);display:flex;justify-content:space-between;}
+  .cell-hdr .type{font-weight:600;color:var(--accent);}
+  .cell-body{padding:16px 20px;}
+  .cell-body pre{margin:0 0 14px;}
+  .explain{margin:10px 0;} .explain b{color:var(--accent);}
+  .footer{margin-top:64px;font-size:0.85rem;color:var(--muted);text-align:center;border-top:1px solid var(--code-border);padding-top:16px;}
+  .diagram{background:#f6f8fa;border:1px dashed var(--code-border);border-radius:8px;padding:16px;margin:16px 0;font-family:"JetBrains Mono",monospace;font-size:0.85rem;white-space:pre;overflow-x:auto;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>04_sqlite3_introduction.ipynb — SQLite3 CRUD Ultra Detail</h1>
+<p class="meta">06주차 · week6 · 전제: 파이썬 기본, SQL을 처음 접하는 사람도 가능. · 총 17개 셀.</p>
+
+<div class="toc">
+<b>목차</b>
+<ol>
+  <li><a href="#why">왜 SQLite3로 시작하는가</a></li>
+  <li><a href="#basics">SQL 기본 개념 3분 요약</a></li>
+  <li><a href="#cells">셀 단위 해설 (0–16)</a></li>
+  <li><a href="#task1">실습과제 1 — CSV → DB 전체 과정</a></li>
+  <li><a href="#task2">실습과제 2 — 모듈화 리팩토링</a></li>
+  <li><a href="#safety">보안·트랜잭션·동시성 심화</a></li>
+  <li><a href="#pitfalls">실무 함정 10가지</a></li>
+  <li><a href="#exercises">자체 점검 문제</a></li>
+</ol>
+</div>
+
+<h2 id="why">1. 왜 SQLite3로 시작하는가</h2>
+<ul>
+  <li><b>무설정</b>: Python 표준 라이브러리. <code>pip install</code> 불필요.</li>
+  <li><b>단일 파일 DB</b>: 서버 프로세스가 없고 <code>.db</code> 파일 하나가 곧 데이터베이스.</li>
+  <li><b>표준 SQL</b>: <code>CREATE/INSERT/SELECT/UPDATE/DELETE</code>의 기본 문법이 PostgreSQL·MySQL과 거의 동일.</li>
+  <li><b>가벼우나 실전감</b>: 브라우저, 스마트폰, 비행기 제어, Firefox 북마크까지 모두 SQLite다. 학습용이면서 실전용.</li>
+</ul>
+<div class="callout info"><b>이 노트북의 학습 흐름</b>
+① 파일 DB 연결 → ② CREATE TABLE → ③ C/R/U/D 연습 → ④ 실습과제 1 (CSV→DB) → ⑤ 실습과제 2 (모듈 리팩토링).</div>
+
+<h2 id="basics">2. SQL 기본 개념 3분 요약</h2>
+<table>
+<thead><tr><th>개념</th><th>설명</th><th>SQL 예</th></tr></thead>
+<tbody>
+<tr><td>테이블</td><td>열(컬럼) × 행(레코드)의 표</td><td><code>CREATE TABLE users (...)</code></td></tr>
+<tr><td>기본 키</td><td>행을 유일하게 식별하는 컬럼</td><td><code>id INTEGER PRIMARY KEY</code></td></tr>
+<tr><td>제약 조건</td><td>데이터 무결성을 위한 규칙</td><td><code>NOT NULL</code>, <code>UNIQUE</code></td></tr>
+<tr><td>CRUD</td><td>DB 기본 4개 연산</td><td>INSERT / SELECT / UPDATE / DELETE</td></tr>
+<tr><td>트랜잭션</td><td>"전부 성공 or 전부 실패"로 묶는 단위</td><td><code>BEGIN … COMMIT / ROLLBACK</code></td></tr>
+</tbody>
+</table>
+
+<h2 id="cells">3. 셀 단위 해설</h2>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 0</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>SQLite3는 별도 서버 없이 파일 하나로 동작하는 경량 데이터베이스 … 데이터베이스의 모든 조작은 CRUD 네 가지로 요약됩니다.</blockquote>
+<div class="explain">두 문장으로 이 노트북의 전체 프레임을 세팅한다: "파일 기반" + "CRUD 4개".</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 1</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>sqlite3.connect()는 파일이 없으면 자동으로 생성 · cursor는 SQL 실행 객체</blockquote>
+<div class="explain">Connection(연결)과 Cursor(실행 창구)의 역할 분리를 미리 알려 준다. Connection은 트랜잭션/열기·닫기 담당, Cursor는 execute·fetch 담당.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 2 — init_db 함수</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">import</span> sqlite3
+<span class="kw">import</span> os
+
+DB_NAME = <span class="str">"test_sqlite3.db"</span>
+
+<span class="kw">def</span> <span class="fn">init_db</span>():
+    <span class="kw">if</span> os.path.exists(DB_NAME):
+        os.remove(DB_NAME)
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(<span class="str">"""
+        CREATE TABLE users (
+            id       INTEGER PRIMARY KEY,
+            name     TEXT NOT NULL,
+            fullname TEXT
+        )
+    """</span>)
+    conn.commit()
+    <span class="kw">return</span> conn</code></pre>
+<div class="explain"><b>무엇을</b>: 기존 DB 파일 삭제 → 새 연결 → <code>users</code> 테이블 생성 → commit → 연결 객체 반환.</div>
+<div class="explain"><b>왜 파일부터 지우는가</b>: 노트북은 <em>재실행</em>을 전제로 한다. <code>CREATE TABLE users</code>는 이미 테이블이 있으면 에러를 내므로, 가장 단순한 멱등성 보장이 "파일 삭제 후 재생성"이다.</div>
+<div class="callout warn"><b>실무에서는?</b>
+실제 서비스에서 <code>os.remove</code>는 데이터를 날리는 파괴적 연산이다. 대신 <code>CREATE TABLE IF NOT EXISTS</code>를 쓰거나, 마이그레이션 도구(Alembic/Flyway)로 스키마 버전 관리를 한다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 3</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>executemany()는 리스트 데이터를 한 번에 여러 행으로 삽입합니다.</blockquote>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 4 — 벌크 INSERT</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>conn = init_db()
+cursor = conn.cursor()
+
+users_data = [
+    (<span class="str">'spongebob'</span>, <span class="str">'Spongebob Squarepants'</span>),
+    (<span class="str">'patrick'</span>,   <span class="str">'Patrick Star'</span>),
+    (<span class="str">'squidward'</span>, <span class="str">'Squidward Tentacles'</span>),
+]
+
+cursor.executemany(
+    <span class="str">"INSERT INTO users (name, fullname) VALUES (?, ?)"</span>,
+    users_data
+)
+conn.commit()
+print(f<span class="str">"{len(users_data)}개의 사용자 데이터 삽입 완료."</span>)</code></pre>
+<div class="explain"><b>무엇을</b>: 튜플 리스트를 한 번의 호출로 모두 삽입.</div>
+<div class="explain"><b>왜 executemany인가</b>: 루프 <code>for row in rows: cur.execute(...)</code>보다 <em>빠르다</em>. 드라이버가 내부적으로 배치 처리하고 트랜잭션 지점을 최적화한다. 대량 적재일수록 체감이 크다.</div>
+<div class="explain"><b>왜 <code>?</code> 바인딩인가</b>: 문자열 포매팅으로 값을 박아 넣으면 <u>SQL 주입</u>이 가능하다. <code>name = 'x'; DROP TABLE users;--</code> 같은 입력이 쿼리 자체를 변형시킨다. <code>?</code>는 값만 전달돼 절대 쿼리 구조를 바꾸지 못한다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 5</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>fetchall()은 모든 행을 리스트로, fetchone()은 첫 번째 행 하나만 반환 · 결과는 튜플 형식이며 인덱스로 각 컬럼에 접근</blockquote>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 6 — 전체 조회</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>cursor.execute(<span class="str">"SELECT id, name, fullname FROM users"</span>)
+rows = cursor.fetchall()
+
+<span class="kw">for</span> row <span class="kw">in</span> rows:
+    print(f<span class="str">"ID: {row[0]}, Name: {row[1]}, FullName: {row[2]}"</span>)</code></pre>
+<div class="explain"><b>포인트</b>: <code>SELECT *</code> 대신 <code>SELECT id, name, fullname</code>처럼 <em>컬럼 순서를 명시</em>. 이렇게 하면 나중에 스키마에 컬럼이 추가되어도 인덱싱이 어긋나지 않는다.</div>
+<div class="callout tip"><b>튜플 → dict 변환 꿀팁</b>
+<code>conn.row_factory = sqlite3.Row</code>를 설정하면 <code>row['name']</code>처럼 이름으로 접근 가능. 컬럼 순서에 의존하지 않아 훨씬 견고하다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 7 — 조건 조회 + fetchone</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>cursor.execute(
+    <span class="str">"SELECT * FROM users WHERE name = ?"</span>,
+    (<span class="str">'patrick'</span>,)   <span class="com"># 튜플 주의: 쉼표 필수</span>
+)
+patrick = cursor.fetchone()
+print(patrick)</code></pre>
+<div class="explain"><b>왜 쉼표가 필수인가</b>: <code>('patrick')</code>은 그냥 문자열이다. <code>('patrick',)</code>처럼 쉼표가 있어야 1-튜플이 되어 <code>executor</code>가 "파라미터 1개"라고 인식한다.</div>
+<div class="explain"><b>fetchone vs fetchall</b>: fetchone은 첫 행만, 없으면 <code>None</code>. 로그인 같은 "단일 일치" 조회에서 필수 패턴.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 8</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>WHERE 조건을 빠뜨리면 테이블 전체가 수정되니 항상 확인하세요.</blockquote>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 9 — UPDATE</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>new_fullname = <span class="str">'S. Squarepants'</span>
+
+cursor.execute(
+    <span class="str">"UPDATE users SET fullname = ? WHERE name = ?"</span>,
+    (new_fullname, <span class="str">'spongebob'</span>)
+)
+conn.commit()
+
+cursor.execute(<span class="str">"SELECT * FROM users WHERE name = 'spongebob'"</span>)
+print(cursor.fetchone())</code></pre>
+<div class="explain"><b>포인트</b>: UPDATE 뒤 반드시 <code>commit()</code>. 이어서 SELECT로 <em>사후 검증</em>하는 습관을 보여준다.</div>
+<div class="callout danger"><b>WHERE 누락의 대재앙</b>
+<code>UPDATE users SET fullname='X'</code> (WHERE 없음)은 모든 행의 fullname을 X로 만든다. 운영 DB에서는 치명적. "UPDATE·DELETE는 먼저 <code>SELECT ... WHERE</code>로 영향 행 수를 확인"이 철칙.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 10</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>WHERE 없이 실행하면 테이블의 모든 데이터가 삭제됩니다.</blockquote>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 11 — DELETE</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>cursor.execute(
+    <span class="str">"DELETE FROM users WHERE name = ?"</span>,
+    (<span class="str">'squidward'</span>,)
+)
+conn.commit()
+
+cursor.execute(<span class="str">"SELECT * FROM users"</span>)
+<span class="kw">for</span> row <span class="kw">in</span> cursor.fetchall():
+    print(row)</code></pre>
+<div class="explain"><b>구조</b>: UPDATE와 동일한 패턴. 파라미터 바인딩 → commit → 재조회 검증.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 12 — 실습과제 1</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>https://github.com/ancestor9/data/blob/main/customers.csv 을 읽어와서 데이터베이스를 만들고 user하는 table에 CRUD하는 코드를 만들어달라</blockquote>
+<div class="explain"><b>핵심</b>: 웹 URL 직접 접근은 보통 <code>raw.githubusercontent.com</code>을 써야 한다 → <code>https://raw.githubusercontent.com/ancestor9/data/main/customers.csv</code>.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 13 — 실습과제 1 예제 코드</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">import</span> pandas <span class="kw">as</span> pd
+<span class="kw">import</span> sqlite3, os
+
+CUSTOMER_DB_NAME = <span class="str">"customer_data.db"</span>
+
+<span class="kw">def</span> <span class="fn">init_customer_db</span>():
+    <span class="kw">if</span> os.path.exists(CUSTOMER_DB_NAME):
+        os.remove(CUSTOMER_DB_NAME)
+    conn = sqlite3.connect(CUSTOMER_DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(<span class="str">"""
+        CREATE TABLE customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            full_name TEXT
+        )
+    """</span>)
+    conn.commit()
+    <span class="kw">return</span> conn
+
+<span class="kw">def</span> <span class="fn">perform_customer_crud_operations</span>(conn):
+    cursor = conn.cursor()
+    csv_url = <span class="str">"https://raw.githubusercontent.com/ancestor9/data/main/customers.csv"</span>
+
+    <span class="com"># [C] CSV 상위 10개 삽입</span>
+    df = pd.read_csv(csv_url).head(<span class="num">10</span>)
+    customer_data = df.apply(<span class="kw">lambda</span> row: (row[<span class="str">'고객ID'</span>], row[<span class="str">'고객ID'</span>]), axis=<span class="num">1</span>).tolist()
+    cursor.executemany(<span class="str">"INSERT INTO customers (username, full_name) VALUES (?, ?)"</span>, customer_data)
+    conn.commit()
+
+    <span class="com"># [R] 상위 10개 조회</span>
+    cursor.execute(<span class="str">"SELECT id, username, full_name FROM customers LIMIT 10"</span>)
+    <span class="kw">for</span> row <span class="kw">in</span> cursor.fetchall():
+        print(row)
+
+    <span class="com"># [U] CUST_0002 수정</span>
+    cursor.execute(<span class="str">"UPDATE customers SET full_name = ? WHERE username = ?"</span>, (<span class="str">'Updated User 02'</span>, <span class="str">'CUST_0002'</span>))
+    conn.commit()
+
+    <span class="com"># [D] CUST_0003 삭제</span>
+    cursor.execute(<span class="str">"DELETE FROM customers WHERE username = ?"</span>, (<span class="str">'CUST_0003'</span>,))
+    conn.commit()
+
+<span class="kw">if</span> __name__ == <span class="str">"__main__"</span>:
+    conn = <span class="kw">None</span>
+    <span class="kw">try</span>:
+        conn = init_customer_db()
+        perform_customer_crud_operations(conn)
+    <span class="kw">finally</span>:
+        <span class="kw">if</span> conn: conn.close()</code></pre>
+<div class="explain"><b>핵심 설계</b>:
+<ul>
+<li><code>AUTOINCREMENT</code>: id를 자동 증가. 삭제된 id를 재사용하지 않으므로 참조 무결성 추적에 유리.</li>
+<li><code>UNIQUE username</code>: 같은 고객ID가 두 번 들어가지 못하게 강제.</li>
+<li><code>pd.read_csv(url).head(10)</code>: 원격 CSV를 즉시 DataFrame으로 로드 후 상위 10개만 취함. 시연 목적에 적합한 크기.</li>
+<li><code>.apply(lambda row: (...), axis=1).tolist()</code>: DataFrame → 튜플 리스트로 바꾸는 관용구. <code>executemany</code>의 입력 형식에 맞춘다.</li>
+<li><code>finally: conn.close()</code>: 예외가 나도 연결을 확실히 닫아 파일 핸들 누수 방지.</li>
+</ul></div>
+<div class="callout tip"><b>더 짧은 방법</b>
+<code>df.to_sql("customers", conn, if_exists="append", index=False)</code>는 pandas가 자체적으로 벌크 INSERT를 실행해 준다. 다만 학습 목적으로는 <code>executemany</code>를 먼저 경험한 뒤 <code>to_sql</code>을 알게 되는 순서가 좋다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 14 — 실습과제 2</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>vscode에서 init.py, create.py, read.py, update.py, delete.py로 모듈화하여 실해하는 코드로 refactoring하라</blockquote>
+<div class="explain">같은 시나리오를 역할별 5개 파일로 분리하라는 요청. "한 파일 안에 다 몰아넣기"의 반대 방향으로 학습을 이끈다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 15</span><span class="type">Code (빈 셀)</span></div><div class="cell-body">학생이 직접 리팩토링을 작성할 자리. 본 저장소 <code>04-17/task2_modules/</code>에 참고 구현이 들어 있다.</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 16</span><span class="type">Markdown</span></div><div class="cell-body"><div class="explain">빈 <code>###</code> 헤더. 후속 추가용.</div></div></div>
+
+<h2 id="task1">4. 실습과제 1 — CSV → DB 전체 과정</h2>
+<div class="diagram">┌─────────────┐  HTTP GET  ┌──────────────┐  DataFrame  ┌────────────┐
+│ raw CSV URL │ ─────────▶ │ pandas.read_ │ ──────────▶ │ df.head(10)│
+└─────────────┘            └──────────────┘             └─────┬──────┘
+                                                              │ .apply → tuples
+                                                              ▼
+┌──────────────┐                                      ┌───────────────┐
+│ customers.db │  ◀── executemany/commit ──           │ [(id,id), ...]│
+│  (SQLite)    │                                      └───────────────┘
+└──────┬───────┘
+       │
+       ├── [R] SELECT LIMIT 10
+       ├── [U] UPDATE CUST_0002
+       └── [D] DELETE CUST_0003</div>
+<p>Cell 13 예제는 이 파이프라인 전 구간을 하나의 파이썬 파일에서 시연한다.</p>
+
+<h2 id="task2">5. 실습과제 2 — 모듈화 리팩토링</h2>
+<p>본 저장소 <code>04-17/task2_modules/</code> 구조:</p>
+<table>
+<thead><tr><th>파일</th><th>책임</th><th>주요 함수</th></tr></thead>
+<tbody>
+<tr><td><code>init.py</code></td><td>DB 연결·재설정·테이블 생성</td><td><code>connect / reset_db / create_table / init_db(fresh=True)</code></td></tr>
+<tr><td><code>create.py</code></td><td>INSERT</td><td><code>insert_one / insert_many / load_from_csv</code></td></tr>
+<tr><td><code>read.py</code></td><td>SELECT</td><td><code>fetch_all / fetch_by_username / count</code></td></tr>
+<tr><td><code>update.py</code></td><td>UPDATE</td><td><code>update_full_name</code></td></tr>
+<tr><td><code>delete.py</code></td><td>DELETE</td><td><code>delete_by_username</code></td></tr>
+<tr><td><code>main.py</code></td><td>오케스트레이션</td><td>위 5개를 import 해 Cell 13 시나리오 재현</td></tr>
+</tbody>
+</table>
+<pre><code><span class="com"># main.py 일부</span>
+<span class="kw">import</span> init, create, read, update, delete
+
+conn = init.init_db(fresh=<span class="kw">True</span>)
+create.load_from_csv(conn, limit=<span class="num">10</span>)
+update.update_full_name(conn, <span class="str">"CUST_0002"</span>, <span class="str">"Updated User 02"</span>)
+delete.delete_by_username(conn, <span class="str">"CUST_0003"</span>)
+<span class="kw">for</span> row <span class="kw">in</span> read.fetch_all(conn): print(row)
+conn.close()</code></pre>
+<div class="callout tip"><b>왜 쪼개는가</b>
+① 테스트 쉬움(모듈별 단위 테스트), ② 변경 영향 축소, ③ 재사용, ④ 협업 — 동시에 다른 파일을 수정해 병합 충돌을 줄인다.</div>
+
+<h2 id="safety">6. 보안·트랜잭션·동시성 심화</h2>
+<h3>6-1. SQL 주입과 파라미터 바인딩</h3>
+<pre><code><span class="com"># 위험: 주입 가능</span>
+name = request.get(<span class="str">"name"</span>)   <span class="com"># "'; DROP TABLE users;--"</span>
+cur.execute(f<span class="str">"SELECT * FROM users WHERE name='{name}'"</span>)
+
+<span class="com"># 안전: 드라이버가 값으로만 취급</span>
+cur.execute(<span class="str">"SELECT * FROM users WHERE name = ?"</span>, (name,))</code></pre>
+
+<h3>6-2. 트랜잭션 · 컨텍스트 매니저</h3>
+<pre><code><span class="kw">with</span> sqlite3.connect(DB) <span class="kw">as</span> conn:
+    conn.execute(<span class="str">"INSERT ..."</span>)
+    conn.execute(<span class="str">"UPDATE ..."</span>)
+<span class="com"># with 블록이 정상 종료되면 자동 COMMIT, 예외 발생 시 ROLLBACK</span></code></pre>
+<p>본 노트북은 명시적 <code>commit</code>을 쓰지만, 실무에서는 <code>with</code> 블록이 원자성 보장을 쉽게 해 준다.</p>
+
+<h3>6-3. 동시성</h3>
+<p>SQLite는 <em>파일 락</em>으로 동시성을 관리한다. 여러 스레드/프로세스에서 쓸 때 주의점:</p>
+<ul>
+<li>한 Connection은 <b>만든 스레드에서만 사용</b>(기본). 다른 스레드에서 쓰려면 <code>check_same_thread=False</code> 또는 스레드별 새 연결.</li>
+<li>대량 쓰기 충돌을 줄이려면 <b>WAL 모드</b>: <code>PRAGMA journal_mode=WAL;</code></li>
+<li>고동시성이 필요하면 SQLite가 적합하지 않다 — PostgreSQL·MySQL로 이동.</li>
+</ul>
+
+<h2 id="pitfalls">7. 실무 함정 10가지</h2>
+<ol>
+  <li><b>commit 누락</b>: execute만 하고 commit을 잊으면 파이썬 종료 시 롤백.</li>
+  <li><b>WHERE 누락</b>: UPDATE/DELETE 재난의 1위.</li>
+  <li><b>SELECT *</b>: 스키마 확장 시 인덱스 기반 접근이 깨진다.</li>
+  <li><b>f-string SQL</b>: SQL 주입 창구.</li>
+  <li><b>1-튜플</b>: <code>(x,)</code> 쉼표 필수. 없으면 문자열.</li>
+  <li><b>경로 상대화</b>: <code>"db.sqlite"</code>는 cwd 의존. <code>Path(__file__).parent / "db.sqlite"</code>로 고정.</li>
+  <li><b>연결 누수</b>: <code>finally: conn.close()</code> 또는 <code>with</code>.</li>
+  <li><b>대량 executemany를 여러 트랜잭션으로 쪼개는 실수</b>: 중간 commit이 끼면 전부 느려진다. 수만 건은 한 트랜잭션으로.</li>
+  <li><b>Row Factory 무시</b>: <code>row[0]</code> 대신 <code>row['id']</code>로 바꾸면 유지보수가 쉬워진다.</li>
+  <li><b>동일 스레드 가정</b>: Gradio/FastAPI 같은 멀티스레드에서 Connection을 공유하면 크래시. 함수마다 새로 connect하거나 풀을 사용.</li>
+</ol>
+
+<h2 id="exercises">8. 자체 점검 문제</h2>
+<ol>
+  <li><code>conn.commit()</code>을 제거하고 프로그램을 다시 실행하면, 앞서 INSERT한 데이터는 어떻게 될까?</li>
+  <li><code>UPDATE users SET name='X'</code>를 실수로 실행했을 때의 복구 방법 두 가지.</li>
+  <li>파라미터 바인딩 없이 문자열 포매팅으로 SQL을 만들면 생길 수 있는 공격 한 가지를 예로.</li>
+  <li><code>fetchone()</code>이 <code>None</code>을 반환하는 조건은?</li>
+  <li>Cell 13의 <code>AUTOINCREMENT</code>를 빼면 어떤 동작 차이가 생기는가?</li>
+  <li>실습과제 2에서 모듈을 <code>init.py</code>가 아니라 <code>database_init.py</code>로 명명하지 않은 이유를 설명.</li>
+</ol>
+
+<div class="callout tip"><b>한 줄로 기억</b>
+SQLite3 = 파일 DB + CRUD. 파이썬 측 규칙은 세 가지만: <b>?로 바인딩</b>, <b>commit 잊지 말 것</b>, <b>WHERE 먼저 SELECT로 검증</b>.</div>
+
+<div class="footer">작성: 2026-04-17 · 출처 노트북: <code>06week/week6/04_sqlite3_introduction.ipynb</code></div>
+</div>
+</body></html>

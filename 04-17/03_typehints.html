@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>03_typehints — Python 타입 힌트 ultradetail 해설</title>
+<style>
+  :root{--fg:#1f2328;--muted:#656d76;--bg:#ffffff;--accent:#0969da;--code-bg:#f6f8fa;--code-border:#d0d7de;--info:#dbeafe;--info-br:#2563eb;--warn:#fef3c7;--warn-br:#d97706;--danger:#fee2e2;--danger-br:#dc2626;--tip:#dcfce7;--tip-br:#16a34a;--kw:#cf222e;--str:#0a3069;--com:#6e7781;--num:#0550ae;--fn:#8250df;}
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{font-family:"Noto Sans KR","Segoe UI",-apple-system,sans-serif;color:var(--fg);background:var(--bg);line-height:1.75;margin:0;padding:0;font-size:16px;}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
+  h1{font-size:2.1rem;margin:0 0 8px;border-bottom:3px solid var(--accent);padding-bottom:12px;}
+  h2{font-size:1.55rem;margin:48px 0 12px;border-left:5px solid var(--accent);padding-left:12px;}
+  h3{font-size:1.22rem;margin:28px 0 10px;color:#0550ae;}
+  h4{font-size:1.05rem;margin:20px 0 8px;}
+  .meta{color:var(--muted);font-size:0.92rem;margin-bottom:32px;}
+  code{font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:0.92em;border:1px solid var(--code-border);}
+  pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;font-size:0.88rem;line-height:1.55;}
+  pre code{background:none;padding:0;border:none;}
+  .kw{color:var(--kw);font-weight:600;} .str{color:var(--str);} .com{color:var(--com);font-style:italic;} .num{color:var(--num);} .fn{color:var(--fn);}
+  .callout{padding:14px 18px;border-radius:8px;margin:16px 0;border-left:5px solid;font-size:0.96rem;}
+  .callout.info{background:var(--info);border-color:var(--info-br);}
+  .callout.warn{background:var(--warn);border-color:var(--warn-br);}
+  .callout.danger{background:var(--danger);border-color:var(--danger-br);}
+  .callout.tip{background:var(--tip);border-color:var(--tip-br);}
+  .callout b{display:block;margin-bottom:4px;}
+  .toc{background:#f6f8fa;border:1px solid var(--code-border);border-radius:8px;padding:18px 24px;margin:24px 0 40px;}
+  .toc ol{margin:0;padding-left:22px;} .toc li{margin:4px 0;}
+  table{border-collapse:collapse;margin:16px 0;font-size:0.94rem;width:100%;}
+  th,td{border:1px solid var(--code-border);padding:8px 12px;text-align:left;vertical-align:top;} th{background:#f6f8fa;}
+  .cell{border:1px solid var(--code-border);border-radius:10px;margin:28px 0;overflow:hidden;}
+  .cell-hdr{background:#eaeef2;padding:8px 14px;font-size:0.85rem;color:var(--muted);border-bottom:1px solid var(--code-border);display:flex;justify-content:space-between;}
+  .cell-hdr .type{font-weight:600;color:var(--accent);}
+  .cell-body{padding:16px 20px;}
+  .cell-body pre{margin:0 0 14px;}
+  .explain{margin:10px 0;} .explain b{color:var(--accent);}
+  .footer{margin-top:64px;font-size:0.85rem;color:var(--muted);text-align:center;border-top:1px solid var(--code-border);padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>03_typehints.ipynb — Python 타입 힌트 Ultra Detail</h1>
+<p class="meta">06주차 · week6 · 전제: 함수·리스트·딕셔너리 기본 사용. · 총 26개 셀 (코드 19 + 마크다운 6 + 빈 1).</p>
+
+<div class="toc">
+<b>목차</b>
+<ol>
+  <li><a href="#why">왜 타입 힌트가 FastAPI 코드 80%의 열쇠인가</a></li>
+  <li><a href="#basics">기본: 변수·함수에서의 선언 (셀 0–6)</a></li>
+  <li><a href="#collections">컬렉션 타입 list/dict/tuple (셀 7–13)</a></li>
+  <li><a href="#optional">Optional·Union·<code>|</code> (셀 14–21)</a></li>
+  <li><a href="#generic">제네릭 컬렉션·Mapping·가변길이 튜플 (셀 22–23)</a></li>
+  <li><a href="#fastapi">FastAPI에서 타입 힌트가 중요한 이유 (셀 24)</a></li>
+  <li><a href="#deep">심화: 타입 별칭, Literal, Protocol, Self</a></li>
+  <li><a href="#pitfalls">함정과 자주 묻는 질문</a></li>
+  <li><a href="#exercises">자체 점검 문제</a></li>
+</ol>
+</div>
+
+<h2 id="why">1. 왜 타입 힌트가 FastAPI 코드 80%의 열쇠인가</h2>
+<p>파이썬은 동적 타입 언어이지만 3.5 이후 <b>PEP 484</b>로 <em>선택적</em> 타입 힌트를 공식 지원한다. 실행에는 영향을 주지 않지만 ① IDE 자동완성, ② 정적 분석기(mypy/pyright) 경고, ③ Pydantic·FastAPI·typer·pydantic-settings 같은 <b>타입 기반 런타임 도구</b>에 정보를 제공한다. FastAPI 함수의 시그니처를 읽는다는 것은 곧 타입 힌트를 읽는다는 것이다.</p>
+<div class="callout info"><b>한 줄</b>
+타입 힌트는 "실행 시 강제되지 않는 약속"이지만, Pydantic·FastAPI가 그 약속을 <em>실제 검증기로 승격</em>시킨다.</div>
+
+<h2 id="basics">2. 기본: 변수·함수 (셀 0–6)</h2>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 0 · 1</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>변수: <code>name: str = "Gemini"</code><br>함수: <code>def 함수명(인자: 타입) -&gt; 반환타입:</code></blockquote>
+<div class="explain"><b>핵심 문법 두 줄</b>을 먼저 머리에 박는다. 변수는 <code>이름 : 타입 = 값</code>, 함수는 <code>def f(x: T) -&gt; R:</code>. 이 패턴이 노트북 전체를 관통한다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 2 — 첫 함수</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">def</span> <span class="fn">greeting</span>(name: <span class="kw">str</span>) -> <span class="kw">str</span>:
+    <span class="kw">return</span> f<span class="str">"Hello, {name}"</span>
+
+greeting(name=<span class="str">'Gemini'</span>)</code></pre>
+<div class="explain"><b>무엇을</b>: 문자열을 받아 문자열을 돌려주는 단순 함수.</div>
+<div class="explain"><b>왜 이렇게 쓰는지</b>: <code>-&gt; str</code>은 "반환값이 문자열"이라는 <em>명세</em>다. IDE는 이 정보를 보고 호출부에서 <code>.upper()</code> 같은 문자열 메서드를 자동완성으로 제안한다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 3 — float 입력 · str 반환</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">def</span> <span class="fn">surface_area_of_cube</span>(edge_length: <span class="kw">float</span>) -> <span class="kw">str</span>:
+    <span class="kw">return</span> f<span class="str">"The surface area of the cube is {6 * edge_length ** 2}."</span></code></pre>
+<div class="explain"><b>무엇을</b>: 한 변 길이를 받아 표면적을 <em>문장 문자열</em>로 반환.</div>
+<div class="explain"><b>포인트</b>: 반환 타입이 <code>float</code>이 아니라 <code>str</code>이라는 점. 반환 <em>형식</em>이 함수명과 타입에서 곧바로 드러나야 한다는 설계 원칙.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 4 · 5 — 함수 호출 두 가지</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>surface_area_of_cube(edge_length=<span class="num">4.00</span>)   <span class="com"># 키워드 인자</span>
+surface_area_of_cube(<span class="num">4.00</span>)                <span class="com"># 위치 인자</span></code></pre>
+<div class="explain"><b>왜 두 번 보여주는가</b>: 타입 힌트는 <em>호출 방식</em>과 독립적이다. 위치로 넘기든 키워드로 넘기든 타입 체커는 같은 규칙을 적용한다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 6 — 반환 타입 실제 확인</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>res = surface_area_of_cube(<span class="num">4.00</span>)
+<span class="kw">type</span>(res)</code></pre>
+<div class="explain"><b>무엇을</b>: 실제로 반환된 객체의 런타임 타입을 확인 → <code>str</code>.</div>
+<div class="callout warn"><b>런타임은 검사하지 않는다</b>
+힌트를 <code>-&gt; int</code>로 바꾸고 실제로 str을 반환해도 파이썬은 에러를 내지 않는다. 타입 힌트의 검사는 <em>외부 도구</em> 또는 <em>Pydantic</em>이 대신해 준다.</div>
+</div></div>
+
+<h2 id="collections">3. 컬렉션 타입 (셀 7–13)</h2>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 7</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>Python 3.9 버전부터는 기본 <code>list</code>, <code>dict</code> 키워드를 그대로 사용합니다.</blockquote>
+<div class="explain">3.8까지는 <code>typing.List[int]</code>처럼 대문자를 써야 했지만, 3.9+에서는 <code>list[int]</code>로 충분하다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 8 — 타입 별칭 <code>type Vector</code></span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">type</span> Vector = <span class="kw">list</span>[<span class="kw">float</span>]
+
+<span class="kw">def</span> <span class="fn">scale</span>(scalar: <span class="kw">float</span>, vector: Vector) -> Vector:
+    <span class="kw">return</span> [scalar * num <span class="kw">for</span> num <span class="kw">in</span> vector]
+
+new_vector = scale(<span class="num">2.0</span>, [<span class="num">1.0</span>, -<span class="num">4.2</span>, <span class="num">5.4</span>])</code></pre>
+<div class="explain"><b>무엇을</b>: <code>list[float]</code>에 <code>Vector</code>라는 <em>의미 있는 이름</em>을 부여하고, 함수 시그니처에 그대로 재사용.</div>
+<div class="explain"><b>왜</b>: 수학적 도메인 개념("벡터")이 코드에서도 드러난다. 반복적으로 등장하는 복잡한 타입을 별칭으로 만들면 유지보수에 유리. <code>type Vector = ...</code>는 <b>PEP 695 (Python 3.12+)</b>의 문법. 구버전에서는 <code>Vector = list[float]</code>만으로도 동일한 효과.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 9 — scale 호출 결과</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>new_vector</code></pre>
+<div class="explain"><b>출력</b>: <code>[2.0, -8.4, 10.8]</code>.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 10 — list/dict/tuple 기본 선언</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>names: <span class="kw">list</span>[<span class="kw">str</span>] = [<span class="str">"Alice"</span>, <span class="str">"Bob"</span>, <span class="str">"Charlie"</span>]
+user_scores: <span class="kw">dict</span>[<span class="kw">str</span>, <span class="kw">int</span>] = {<span class="str">"Alice"</span>: <span class="num">100</span>, <span class="str">"Bob"</span>: <span class="num">90</span>}
+user_info: <span class="kw">tuple</span>[<span class="kw">int</span>, <span class="kw">str</span>] = (<span class="num">1</span>, <span class="str">"Admin"</span>)</code></pre>
+<div class="explain"><b>포인트</b>:
+<ul>
+<li><code>list[str]</code>: 원소의 타입이 문자열. 길이는 제한 없음.</li>
+<li><code>dict[str, int]</code>: 키는 문자열, 값은 정수.</li>
+<li><code>tuple[int, str]</code>: <em>순서가 있는 정확히 2개</em>의 원소. 첫째 int, 둘째 str.</li>
+</ul></div>
+<div class="callout tip"><b>tuple과 list의 큰 차이</b>
+list는 "같은 종류 원소가 여러 개", tuple은 "서로 다른 역할을 가진 고정 길이". DB 한 행(<code>(id, name, active)</code>)을 표현할 땐 tuple, 사용자 이름 목록엔 list.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 11 · 12 · 13 — 확인</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>names         <span class="com"># ['Alice', 'Bob', 'Charlie']</span>
+user_scores   <span class="com"># {'Alice': 100, 'Bob': 90}</span>
+user_info     <span class="com"># (1, 'Admin')</span></code></pre>
+<div class="explain">각 변수의 실제 내용을 출력해 타입 선언과 값이 일치함을 육안 확인.</div>
+</div></div>
+
+<h2 id="optional">4. Optional · Union · <code>|</code> (셀 14–21)</h2>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 14</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>Union: 여러 타입 중 하나일 수 있음 · Optional: 해당 타입이거나 None임 (사실 Union[타입, None]의 줄임표현)</blockquote>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 15 — <code>|</code>와 <code>Union</code> 혼용</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">from</span> typing <span class="kw">import</span> Union
+
+<span class="com"># Python 3.10+ 권장 방식</span>
+<span class="kw">def</span> <span class="fn">get_item</span>(item_id: <span class="kw">int</span>, description: <span class="kw">str</span> | <span class="kw">None</span> = <span class="kw">None</span>):
+    <span class="kw">return</span> {<span class="str">"id"</span>: item_id, <span class="str">"desc"</span>: description}
+
+<span class="com"># 3.10 미만 버전 방식</span>
+<span class="kw">def</span> <span class="fn">get_user</span>(user_id: Union[<span class="kw">int</span>, <span class="kw">str</span>]):
+    <span class="kw">return</span> {<span class="str">"id"</span>: user_id}</code></pre>
+<div class="explain"><b>무엇을</b>: 두 함수 시그니처로 유니온의 <em>두 가지 작성법</em>을 나란히 제시.</div>
+<ul>
+<li><code>str | None = None</code>: "문자열 또는 없음"이라는 의미. 기본값이 있어 <em>선택 인자</em>가 된다.</li>
+<li><code>Union[int, str]</code>: <code>|</code>의 구버전 호환 표현. 세미 공식 표준 라이브러리 <code>typing</code>에서 import.</li>
+</ul>
+<div class="callout tip"><b>실무 권장</b>
+3.10+ 환경이면 <code>|</code>를 쓰는 쪽이 간결하다. 구버전 호환이 필요하면 <code>from __future__ import annotations</code>를 파일 상단에 두면 3.7+에서도 <code>str | None</code> 문법이 "문자열로만" 파싱돼 동작한다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 16 · 17 — get_item 호출</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>get_item(item_id=<span class="num">1</span>)                    <span class="com"># {'id': 1, 'desc': None}</span>
+get_item(item_id=<span class="num">1</span>, description=<span class="str">'test'</span>) <span class="com"># {'id': 1, 'desc': 'test'}</span></code></pre>
+<div class="explain"><b>포인트</b>: 선택 인자 <code>description</code>은 생략해도 되고, 값을 주면 그대로 들어간다. FastAPI 엔드포인트에서 query string의 필수/선택 여부가 이 문법으로 자연스럽게 표현된다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 18 · 19 — get_user 호출</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>get_user(user_id=<span class="num">1</span>)      <span class="com"># {'id': 1}  — int 허용</span>
+get_user(user_id=<span class="str">'1'</span>)    <span class="com"># {'id': '1'} — str도 허용</span></code></pre>
+<div class="explain"><b>관찰</b>: <code>Union[int, str]</code>이 있어 둘 다 유효. 단, 함수 자체는 어떤 검증도 하지 않는다. "어떤 타입이든 그대로 통과"라는 "약속"의 선언일 뿐.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 20 — <code>Optional[int]</code></span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">from</span> typing <span class="kw">import</span> Optional
+
+<span class="kw">def</span> <span class="fn">greeting</span>(name: <span class="kw">str</span>, enthusiasm: Optional[<span class="kw">int</span>] = <span class="kw">None</span>) -> <span class="kw">str</span>:
+    <span class="kw">if</span> enthusiasm <span class="kw">is</span> <span class="kw">None</span>:
+        <span class="kw">return</span> f<span class="str">"Hello, {name}."</span>
+    <span class="kw">return</span> f<span class="str">"Hello, {name}!"</span> * enthusiasm</code></pre>
+<div class="explain"><b>동치 관계</b>: <code>Optional[int]</code> ≡ <code>Union[int, None]</code> ≡ <code>int | None</code>. 셋 모두 "정수 또는 None". 가독성을 위해 "의미상 None이 유효한 값"임을 강조하고 싶을 때 <code>Optional</code>을 선호하는 관행이 있다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 21 — 결과 확인</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>greeting_result = greeting(<span class="str">"Alice"</span>, <span class="num">3</span>)
+print(greeting_result)   <span class="com"># Hello, Alice!Hello, Alice!Hello, Alice!</span></code></pre>
+<div class="explain"><b>관찰</b>: 문자열 반복 연산자 <code>*</code>가 3번 곱해져 출력. 열정치(enthusiasm)를 None으로 주면 단문이 된다.</div>
+</div></div>
+
+<h2 id="generic">5. 제네릭 컬렉션·Mapping·가변길이 튜플 (셀 22–23)</h2>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 22 — 복합 타입 시그니처</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code><span class="kw">from</span> typing <span class="kw">import</span> List, Tuple
+<span class="kw">from</span> collections.abc <span class="kw">import</span> Mapping
+
+<span class="kw">def</span> <span class="fn">process_records</span>(
+    data: List[Tuple[<span class="kw">str</span>, <span class="kw">int</span>]],                    <span class="com"># 리스트[(str,int)]</span>
+    settings: Mapping[<span class="kw">str</span>, Union[<span class="kw">str</span>, <span class="kw">int</span>]],            <span class="com"># dict 대신 Mapping</span>
+    coordinates: Tuple[<span class="kw">float</span>, <span class="kw">float</span>, <span class="kw">float</span>]              <span class="com"># 고정 길이 3</span>
+) -> Tuple[<span class="kw">int</span>, ...]:                                     <span class="com"># 가변 길이 튜플</span>
+    print(f<span class="str">"데이터: {data}, 데이터 타입 {type(data)}"</span>)
+    processed_count = <span class="kw">len</span>(data)
+    <span class="com"># ... (설정·좌표 출력 생략)</span>
+    <span class="kw">return</span> (processed_count)   <span class="com"># ⚠ 소괄호만으로는 튜플이 안 된다</span></code></pre>
+<div class="explain"><b>무엇을</b>: 세 종류의 입력을 묶어 다양한 제네릭 표기를 한 자리에서 보여 주는 종합 예.</div>
+<div class="explain"><b>왜 <code>Mapping</code>인가</b>: <code>dict</code>를 쓰면 "딱 <code>dict</code>만 받는다"는 뜻이 된다. <code>Mapping</code>은 "딕셔너리처럼 동작하는 모든 것"을 허용하는 <b>추상 타입</b>이다. 표준 <code>dict</code>, <code>OrderedDict</code>, <code>MappingProxyType</code> 등이 자연스럽게 들어갈 수 있어 API 유연성이 높아진다.</div>
+<div class="explain"><b><code>Tuple[int, ...]</code>의 의미</b>: 앞의 <code>Tuple[int, str]</code>처럼 <em>정확히 두 개</em>가 아니라, "<em>임의 개수의 정수</em>" 튜플. <code>...</code>(Ellipsis)가 "개수 가변"을 뜻한다.</div>
+<div class="callout danger"><b>중요한 함정</b>
+본 함수는 <code>return (processed_count)</code>로 끝나는데, 이건 <u>튜플이 아니라 그냥 정수</u>다. 1-튜플을 만들려면 반드시 <code>(processed_count,)</code>처럼 쉼표가 있어야 한다. 반환 타입 선언은 <code>Tuple[int, ...]</code>인데 실제 반환이 int라서 타입 체커가 경고하거나, 호출부에서 튜플로 사용하면 런타임 오류가 난다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 23 — 실행</span><span class="type">Code</span></div><div class="cell-body">
+<pre><code>processed = process_records(records, settings, coordinates)</code></pre>
+<div class="explain"><b>무엇을</b>: 노트북 상단에서 정의한 세 입력을 실제로 전달해 함수를 실행. 출력 문장은 각 파라미터의 타입을 확인시켜 준다.</div>
+</div></div>
+
+<h2 id="fastapi">6. FastAPI에서 타입 힌트가 중요한 이유 (셀 24)</h2>
+<div class="cell"><div class="cell-hdr"><span>Cell 24</span><span class="type">Markdown</span></div><div class="cell-body">
+<blockquote>
+① 자동 데이터 검증: age: int로 선언했는데 "twenty"가 오면 FastAPI가 422 에러를 생성.<br>
+② 자동 문서화(Swagger): <code>.../docs</code> 에 API 문서가 자동 생성.<br>
+③ 에디터 지원: 자동 완성이 완벽하게 작동.
+</blockquote>
+<div class="explain"><b>왜 이 세 가지인가</b>: 타입 힌트 1줄이 3가지 도메인(런타임 검증, 문서, IDE)을 동시에 개선한다. 이것이 "한 번 쓰면 세 번 덕본다"는 FastAPI 특유의 생산성이다.</div>
+</div></div>
+
+<div class="cell"><div class="cell-hdr"><span>Cell 25</span><span class="type">Code (빈 셀)</span></div><div class="cell-body">학생이 FastAPI 엔드포인트 스텁을 직접 작성하도록 비운 자리.</div></div>
+
+<h2 id="deep">7. 심화: 타입 별칭, Literal, Protocol, Self</h2>
+
+<h3>7-1. 타입 별칭 (Type Alias)</h3>
+<pre><code><span class="com"># PEP 695 (3.12+)</span>
+<span class="kw">type</span> UserId = <span class="kw">int</span>
+<span class="kw">type</span> Row = <span class="kw">tuple</span>[UserId, <span class="kw">str</span>]
+
+<span class="com"># 3.12 미만 호환</span>
+UserId = <span class="kw">int</span>
+Row = <span class="kw">tuple</span>[UserId, <span class="kw">str</span>]</code></pre>
+<p>도메인 언어로 타입을 바꾸면 함수 시그니처 한 줄을 읽고 의미가 바로 들어온다.</p>
+
+<h3>7-2. Literal</h3>
+<pre><code><span class="kw">from</span> typing <span class="kw">import</span> Literal
+
+<span class="kw">def</span> <span class="fn">set_status</span>(s: Literal[<span class="str">"active"</span>, <span class="str">"paused"</span>, <span class="str">"closed"</span>]) -> <span class="kw">None</span>: ...
+</code></pre>
+<p>가능한 값의 <em>집합</em>이 작을 때 열거형보다 가볍게 쓸 수 있다. FastAPI는 이걸 OpenAPI의 enum으로 변환한다.</p>
+
+<h3>7-3. Protocol (구조적 서브타이핑)</h3>
+<pre><code><span class="kw">from</span> typing <span class="kw">import</span> Protocol
+
+<span class="kw">class</span> <span class="fn">SupportsLen</span>(Protocol):
+    <span class="kw">def</span> <span class="fn">__len__</span>(<span class="kw">self</span>) -> <span class="kw">int</span>: ...
+
+<span class="kw">def</span> <span class="fn">first_half</span>(x: SupportsLen) -> <span class="kw">int</span>:
+    <span class="kw">return</span> <span class="kw">len</span>(x) // <span class="num">2</span></code></pre>
+<p>"특정 메서드만 있으면 된다"를 표현한다. 상속 관계가 아니라 <em>모양</em>으로 맞으면 허용 — 파이썬다운 덕 타이핑을 타입 시스템으로 옮겨 놓은 개념.</p>
+
+<h3>7-4. Self (PEP 673, 3.11+)</h3>
+<pre><code><span class="kw">from</span> typing <span class="kw">import</span> Self
+
+<span class="kw">class</span> <span class="fn">Counter</span>:
+    <span class="kw">def</span> <span class="fn">incr</span>(<span class="kw">self</span>) -> Self:   <span class="com"># 자기 자신 타입을 정확히</span>
+        ...
+        <span class="kw">return</span> <span class="kw">self</span></code></pre>
+<p>서브클래스에서도 타입이 올바르게 좁혀진다. 체이닝 API를 만들 때 유용.</p>
+
+<h2 id="pitfalls">8. 함정과 자주 묻는 질문</h2>
+<ul>
+  <li><b>단일 원소 튜플</b>: <code>(x,)</code> 쉼표 필수. <code>(x)</code>는 그냥 괄호.</li>
+  <li><b><code>Tuple[int, ...]</code> vs <code>tuple[int, ...]</code></b>: 전자는 <code>typing</code>, 후자는 3.9+의 내장. 동치.</li>
+  <li><b>Optional은 "반드시 null 가능"이 아니다</b>: <code>Optional[int] = None</code>처럼 <em>기본값까지 줘야</em> "생략 가능"이 된다. 기본값이 없는 <code>Optional[int]</code>는 "호출 시 반드시 int나 None 중 하나를 넘겨야 한다"는 뜻.</li>
+  <li><b>실행시 검사 없음</b>: 타입이 맞지 않아도 파이썬은 그냥 돌아간다. mypy/pyright를 CI에 넣거나, Pydantic 모델로 검증 지점을 모아야 실효성이 생긴다.</li>
+  <li><b>Mapping vs dict</b>: 함수 매개변수는 <code>Mapping</code>(읽기만 필요할 때), 반환은 <code>dict</code>(수정 가능)가 전형적인 가이드라인.</li>
+</ul>
+
+<h2 id="exercises">9. 자체 점검 문제</h2>
+<ol>
+  <li><code>list[str]</code>과 <code>tuple[str, str]</code>은 의미가 어떻게 다른가?</li>
+  <li><code>int | None</code>, <code>Union[int, None]</code>, <code>Optional[int]</code>는 서로 동치인가?</li>
+  <li>Cell 22 함수의 반환문 <code>return (processed_count)</code>는 무엇을 반환하는가? 1-튜플로 바꾸려면 어떻게 써야 하는가?</li>
+  <li><code>dict[str, int]</code>만 받는 함수에 <code>OrderedDict</code>를 넘기면 타입 체커가 어떤 반응을 할 수 있을까? 해결책은?</li>
+  <li>FastAPI 엔드포인트 <code>def create(user: User)</code>에 <code>User = dict</code>(타입 별칭)만 넣었을 때와 <code>User(BaseModel)</code>을 넣었을 때의 차이를 한 줄로.</li>
+</ol>
+
+<div class="callout tip"><b>한 줄로 기억</b>
+타입 힌트는 "코드에 적은 주석"이 아니라 "<b>도구가 읽어가는 메타데이터</b>"다. 그 메타데이터를 Pydantic/FastAPI가 실행시간 규칙으로 만든다.</div>
+
+<div class="footer">작성: 2026-04-17 · 출처 노트북: <code>06week/week6/03_typehints.ipynb</code></div>
+</div>
+</body></html>

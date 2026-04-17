@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>01_decorator — Python 데코레이터 ultradetail 해설</title>
+<style>
+  :root{
+    --fg:#1f2328; --muted:#656d76; --bg:#ffffff; --accent:#0969da;
+    --code-bg:#f6f8fa; --code-border:#d0d7de;
+    --info:#dbeafe;   --info-br:#2563eb;
+    --warn:#fef3c7;   --warn-br:#d97706;
+    --danger:#fee2e2; --danger-br:#dc2626;
+    --tip:#dcfce7;    --tip-br:#16a34a;
+    --kw:#cf222e; --str:#0a3069; --com:#6e7781; --num:#0550ae; --fn:#8250df;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:"Noto Sans KR","Segoe UI",-apple-system,sans-serif;color:var(--fg);background:var(--bg);line-height:1.75;margin:0;padding:0;font-size:16px;}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
+  h1{font-size:2.1rem;margin:0 0 8px;border-bottom:3px solid var(--accent);padding-bottom:12px;}
+  h2{font-size:1.55rem;margin:48px 0 12px;border-left:5px solid var(--accent);padding-left:12px;}
+  h3{font-size:1.22rem;margin:28px 0 10px;color:#0550ae;}
+  h4{font-size:1.05rem;margin:20px 0 8px;}
+  .meta{color:var(--muted);font-size:0.92rem;margin-bottom:32px;}
+  code{font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:0.92em;border:1px solid var(--code-border);}
+  pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:16px 18px;overflow-x:auto;font-family:"JetBrains Mono","Consolas",ui-monospace,monospace;font-size:0.88rem;line-height:1.55;}
+  pre code{background:none;padding:0;border:none;}
+  .kw{color:var(--kw);font-weight:600;} .str{color:var(--str);} .com{color:var(--com);font-style:italic;} .num{color:var(--num);} .fn{color:var(--fn);}
+  .callout{padding:14px 18px;border-radius:8px;margin:16px 0;border-left:5px solid;font-size:0.96rem;}
+  .callout.info{background:var(--info);border-color:var(--info-br);}
+  .callout.warn{background:var(--warn);border-color:var(--warn-br);}
+  .callout.danger{background:var(--danger);border-color:var(--danger-br);}
+  .callout.tip{background:var(--tip);border-color:var(--tip-br);}
+  .callout b{display:block;margin-bottom:4px;}
+  .toc{background:#f6f8fa;border:1px solid var(--code-border);border-radius:8px;padding:18px 24px;margin:24px 0 40px;}
+  .toc ol{margin:0;padding-left:22px;}
+  .toc li{margin:4px 0;}
+  table{border-collapse:collapse;margin:16px 0;font-size:0.94rem;width:100%;}
+  th,td{border:1px solid var(--code-border);padding:8px 12px;text-align:left;vertical-align:top;}
+  th{background:#f6f8fa;}
+  .cell{border:1px solid var(--code-border);border-radius:10px;margin:28px 0;overflow:hidden;}
+  .cell-hdr{background:#eaeef2;padding:8px 14px;font-size:0.85rem;color:var(--muted);border-bottom:1px solid var(--code-border);display:flex;justify-content:space-between;}
+  .cell-hdr .type{font-weight:600;color:var(--accent);}
+  .cell-body{padding:16px 20px;}
+  .cell-body pre{margin:0 0 14px;}
+  .explain{margin:10px 0;}
+  .explain b{color:var(--accent);}
+  .diagram{background:#f6f8fa;border:1px dashed var(--code-border);border-radius:8px;padding:16px;margin:16px 0;font-family:"JetBrains Mono",monospace;font-size:0.85rem;white-space:pre;overflow-x:auto;}
+  hr{border:none;border-top:1px solid var(--code-border);margin:32px 0;}
+  .footer{margin-top:64px;font-size:0.85rem;color:var(--muted);text-align:center;border-top:1px solid var(--code-border);padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>01_decorator.ipynb — Python 데코레이터 완전 해설</h1>
+<p class="meta">06주차 · week6 · 작성 대상 학습자: 파이썬 기본 문법은 알지만 함수가 일급 객체라는 개념은 막 접해본 단계. · 총 8개 셀 · 코드 4 / 마크다운 3 / 빈 셀 1.</p>
+
+<div class="toc">
+<b>목차</b>
+<ol>
+  <li><a href="#why">왜 데코레이터를 배우는가</a></li>
+  <li><a href="#cells">셀 단위 해설</a></li>
+  <li><a href="#internals">@ 문법당의 내부 동작</a></li>
+  <li><a href="#closures">클로저·first-class 함수와의 관계</a></li>
+  <li><a href="#patterns">실무 패턴 5가지</a></li>
+  <li><a href="#pitfalls">흔한 함정과 <code>functools.wraps</code></a></li>
+  <li><a href="#exercises">자체 점검 문제</a></li>
+</ol>
+</div>
+
+<h2 id="why">1. 왜 데코레이터를 배우는가</h2>
+<p>데코레이터는 "<b>함수를 입력받아 함수를 돌려주는 함수</b>"이다. 한 줄 정의지만 파이썬 표현력의 중심축이다. 실무에서 데코레이터가 중요한 이유는 크게 셋이다.</p>
+<ul>
+  <li><b>횡단 관심사 분리</b> — 로깅·인증·캐시·타이밍 같은 공통 기능을 <em>본 로직을 수정하지 않고</em> 덧붙인다.</li>
+  <li><b>등록 패턴</b> — 여러 함수를 하나의 레지스트리에 자동 등록(라우팅, 이벤트 핸들러).</li>
+  <li><b>프레임워크 가독성</b> — Flask <code>@app.route</code>, pytest <code>@pytest.fixture</code>, FastAPI <code>@app.get</code>, Click <code>@click.command</code> 같은 API의 전부가 데코레이터다.</li>
+</ul>
+<div class="callout info"><b>이 노트북의 목표</b>
+수작업으로 "함수를 모으는" 코드를 먼저 작성해 본 다음, 그 동일한 일을 <code>@</code> 문법당으로 간결하게 표현하는 과정을 눈으로 확인하는 것.
+</div>
+
+<h2 id="cells">2. 셀 단위 해설</h2>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 0</span><span class="type">Markdown</span></div>
+<div class="cell-body">
+<blockquote><b>Decorator</b> · 함수가 다른 함수를 불러온다 · <b>1. 수작업</b></blockquote>
+<div class="explain"><b>무엇을</b>: 데코레이터의 핵심 직관을 한 줄로 요약하고, 이어질 절을 "1. 수작업"으로 열어간다.</div>
+<div class="explain"><b>왜</b>: 강의는 의도적으로 <em>문법당(<code>@</code>)을 먼저 쓰지 않는다</em>. @는 사실 문법의 껍데기일 뿐이고, 본질은 "함수를 다른 함수에 넘긴다"이기 때문에 먼저 원시적인 방식을 경험시키려는 교육적 설계이다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 1 — 수작업 수집기</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code><span class="com"># 수집된 함수들</span>
+collected_functions = []
+
+<span class="kw">def</span> <span class="fn">collect</span>(func):          <span class="com"># "수집하다" — 데코레이터의 동작을 직관적으로 표현</span>
+    print(f<span class="str">'collecting: {func.__name__}'</span>)
+    collected_functions.append(func)
+    <span class="kw">return</span> func
+
+<span class="kw">def</span> <span class="fn">f1</span>():
+    print(<span class="str">'running f1()'</span>)
+
+collect(f1)
+</code></pre>
+<div class="explain"><b>무엇을 하는지</b> · <code>collect</code>는 임의의 함수 객체를 인자로 받아 ① 그 이름을 찍고, ② 글로벌 리스트에 저장하고, ③ <u>동일한 함수 객체를 그대로 반환</u>한다. 그 뒤 <code>f1</code>을 정의하고 수작업으로 <code>collect(f1)</code>을 호출해 리스트에 넣는다.</div>
+<div class="explain"><b>왜 이렇게 쓰는지</b> · 파이썬에서 함수는 <b>일급 객체(first-class object)</b>이기 때문에 다른 변수처럼 전달·저장·반환이 가능하다. <code>func.__name__</code>은 함수의 고유 속성 — 함수가 객체라서 속성이 붙어 있다는 결정적인 증거다. <code>return func</code>이 있어야 이후 데코레이터 문법(<code>f1 = collect(f1)</code>)에서 <code>f1</code>이 사라지지 않고 그대로 살아남는다.</div>
+<div class="diagram">
+[파이썬 함수는 객체다]
+  f1 ─── 이름 바인딩 ───▶ &lt;function object at 0x...&gt;
+                                ↑
+           collect(f1)이 이 객체 자체를 받아 리스트에 넣는다
+</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 2 — 수집 확인</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code>collected_functions</code></pre>
+<div class="explain"><b>무엇을</b>: 현재까지 수집된 함수 리스트를 출력.</div>
+<div class="explain"><b>왜</b>: REPL/Jupyter에서 마지막 표현식은 자동으로 <code>repr</code>로 찍힌다. 여기서 출력은 <code>[&lt;function f1 at 0x...&gt;]</code> 형태의 한 줄이 나온다 — "리스트 안에 함수 객체 그대로가 들어있다"는 핵심을 육안으로 확인시켜 준다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 3 — 두 번째 함수 수동 등록</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code><span class="kw">def</span> <span class="fn">f2</span>():
+    print(<span class="str">'running f2()'</span>)
+
+collect(f2)</code></pre>
+<div class="explain"><b>무엇을</b>: <code>f2</code>를 새로 정의하고 수동으로 <code>collect</code>에 넘긴다.</div>
+<div class="explain"><b>왜 이 단계가 필요한가</b>: <em>같은 작업의 반복</em>을 보여주기 위함이다. 함수를 여러 개 수집해야 할 때마다 <code>collect(fN)</code>을 직접 불러주는 것은 번거롭고 잊어버리기 쉽다. 바로 이 "지루함"이 다음 절에서 <code>@</code>를 도입하는 동기가 된다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 4 — 수집 리스트 재확인</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code>collected_functions</code></pre>
+<div class="explain"><b>출력 예시</b>: <code>[&lt;function f1 at 0x...&gt;, &lt;function f2 at 0x...&gt;]</code> — 두 함수가 같은 리스트에 나란히 저장되어 있다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 5</span><span class="type">Markdown</span></div>
+<div class="cell-body">
+<blockquote><b>2. Decorator(@)</b></blockquote>
+<div class="explain">이제 동일한 일을 <code>@</code> 문법당으로 다시 한다. 코드 양과 호출 구조의 차이를 앞 절과 직접 비교하는 것이 핵심.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 6 — @ 데코레이터 등록</span><span class="type">Code</span></div>
+<div class="cell-body">
+<pre><code>registry = [] <span class="com"># 함수들이 저장될 레지스트리 (리스트)</span>
+
+<span class="kw">def</span> <span class="fn">register</span>(func):
+    <span class="com"># 모듈 로드 시 이 부분이 즉시 실행됩니다.</span>
+    print(f<span class="str">'running register({func})'</span>)
+    registry.append(func)
+    <span class="kw">return</span> func <span class="com"># 장식된 함수를 그대로 반환합니다.</span>
+
+<span class="kw">@register</span>
+<span class="kw">def</span> <span class="fn">f1</span>():
+    print(<span class="str">'running f1()'</span>)
+
+<span class="kw">@register</span>
+<span class="kw">def</span> <span class="fn">f2</span>():
+    print(<span class="str">'running f2()'</span>)
+
+<span class="kw">@register</span>
+<span class="kw">def</span> <span class="fn">f3</span>():
+    print(<span class="str">'running f3()'</span>)
+
+print(f<span class="str">'Registry after loading module: {registry}'</span>)</code></pre>
+<div class="explain"><b>무엇을</b>: <code>register</code>는 앞의 <code>collect</code>와 시그니처가 똑같다(함수 받아 리스트에 넣고 반환). <code>@register</code>를 세 번 쓰니 <code>f1/f2/f3</code>이 정의되는 <u>즉시</u> 자동으로 등록된다. 마지막 <code>print</code>는 레지스트리에 세 함수가 모두 담겨 있음을 보여준다.</div>
+<div class="explain"><b>왜 이렇게 쓰는지</b>: <code>@register</code>는 정확히 <code>f1 = register(f1)</code>의 <u>문법당(syntactic sugar)</u>이다. 시각적으로 "이 함수는 등록 대상"이라는 의도가 함수 선언 바로 위에서 드러나므로, 유지보수자가 구조를 파악하기 쉽다.</div>
+<h4>실행 순서 (중요)</h4>
+<ol>
+  <li>파이썬이 모듈을 위에서 아래로 읽는다.</li>
+  <li><code>registry = []</code>로 빈 리스트를 만든다.</li>
+  <li><code>register</code> 함수 정의가 끝난다.</li>
+  <li><code>@register</code> 아래 <code>def f1(): ...</code> 블록을 만난다 → 내부적으로 <code>f1 = register(f1)</code>이 실행되고 그 안에서 <code>print('running register(&lt;f1&gt;)')</code>가 즉시 찍힌다.</li>
+  <li>f2, f3에 대해 동일.</li>
+  <li>마지막 <code>print</code>가 실행되어 리스트 세 개가 표시된다.</li>
+</ol>
+<div class="callout tip"><b>핵심 관찰</b>
+<code>f1()</code>을 호출하지 않아도 <code>register</code>의 본문이 이미 실행된다는 점이다. 데코레이터는 <em>정의 시점</em>에 동작하는 코드다. 이것이 "함수를 호출하기 전에 등록부터 끝내 놓는" Flask·FastAPI 라우팅의 기본 원리다.</div>
+</div></div>
+
+<div class="cell">
+<div class="cell-hdr"><span>Cell 7</span><span class="type">Code (빈 셀)</span></div>
+<div class="cell-body"><div class="explain">연습 공간. 학생이 직접 데코레이터를 하나 더 만들어 보도록 비워 둔 자리이다.</div></div></div>
+
+<h2 id="internals">3. <code>@</code> 문법당의 내부 동작</h2>
+<p>두 표현은 <b>완전히 동일</b>하다. 데코레이터를 이해한다는 것은 두 줄이 서로 바꿔 쓸 수 있다고 확신하는 것이다.</p>
+<pre><code><span class="com"># 데코레이터 문법</span>
+<span class="kw">@register</span>
+<span class="kw">def</span> <span class="fn">greet</span>():
+    print(<span class="str">"hi"</span>)
+
+<span class="com"># 위와 정확히 같은 의미</span>
+<span class="kw">def</span> <span class="fn">greet</span>():
+    print(<span class="str">"hi"</span>)
+greet = register(greet)</code></pre>
+
+<p>파이썬은 이 두 표현을 같은 바이트코드로 번역한다. 따라서 <code>@</code>는 "멋 내기"가 아니라 <b>가독성을 위한 공식적인 재작성 규칙</b>일 뿐이다.</p>
+
+<h2 id="closures">4. 클로저 · first-class 함수와의 관계</h2>
+<p>본 노트북은 "인자 변경 없이 그냥 통과"하는 가장 단순한 데코레이터만 다룬다. 그러나 실무에서는 <b>동작 자체를 감싸는</b> 래퍼가 훨씬 많다. 그때 등장하는 개념이 <em>클로저</em>다.</p>
+<pre><code><span class="kw">import</span> time
+<span class="kw">from</span> functools <span class="kw">import</span> wraps
+
+<span class="kw">def</span> <span class="fn">timing</span>(func):
+    <span class="kw">@wraps</span>(func)                     <span class="com"># 원본 __name__/__doc__ 보존 — 뒤에서 설명</span>
+    <span class="kw">def</span> <span class="fn">wrapper</span>(*args, **kwargs):   <span class="com"># 클로저: 바깥의 func을 포획</span>
+        t0 = time.perf_counter()
+        result = func(*args, **kwargs)
+        dt = time.perf_counter() - t0
+        print(f<span class="str">'{func.__name__} took {dt:.4f}s'</span>)
+        <span class="kw">return</span> result
+    <span class="kw">return</span> wrapper
+
+<span class="kw">@timing</span>
+<span class="kw">def</span> <span class="fn">slow_add</span>(a, b):
+    time.sleep(0.1)
+    <span class="kw">return</span> a + b
+
+slow_add(<span class="num">1</span>, <span class="num">2</span>)   <span class="com"># ▶ slow_add took 0.1001s</span></code></pre>
+<div class="callout info"><b>차이를 정리</b>
+"등록형" 데코레이터(노트북의 <code>register</code>)는 함수를 그대로 반환한다. "래퍼형" 데코레이터(<code>timing</code>)는 새 함수 <code>wrapper</code>를 반환한다. 두 패턴을 구분해 두면 다른 코드를 읽을 때 혼란이 크게 준다.</div>
+
+<h2 id="patterns">5. 실무 패턴 5가지</h2>
+<table>
+<thead><tr><th>패턴</th><th>대표 예</th><th>핵심</th></tr></thead>
+<tbody>
+<tr><td>등록 (registry)</td><td>Flask <code>@app.route('/')</code></td><td>함수를 URL → 핸들러 매핑에 넣는다</td></tr>
+<tr><td>타이밍/로깅</td><td><code>@timing</code>, <code>@log_calls</code></td><td>입력·실행시간·출력 관측</td></tr>
+<tr><td>캐시 (memoize)</td><td><code>functools.lru_cache</code></td><td>인자별 결과를 저장해 재호출을 생략</td></tr>
+<tr><td>권한 체크</td><td><code>@login_required</code></td><td>전처리에서 인증 미달이면 예외/리디렉션</td></tr>
+<tr><td>재시도</td><td><code>@retry(times=3)</code></td><td>실패 시 자동 재시도 (인자 받는 데코레이터)</td></tr>
+</tbody>
+</table>
+<p>마지막 "인자 받는 데코레이터"는 3단 구조(<code>def outer(cfg): def deco(f): def wrapper(*a,**kw): ... return wrapper; return deco; return outer</code>)가 되어 한 번에 이해가 안 될 수 있다. 이 노트북의 범위를 넘지만, 원리는 동일하다: <em>"호출 시점에 함수를 감싸서 반환한다."</em></p>
+
+<h2 id="pitfalls">6. 흔한 함정과 <code>functools.wraps</code></h2>
+<ul>
+  <li><b>메타데이터 유실</b>: 래퍼형 데코레이터를 씌우면 <code>func.__name__</code>, <code>__doc__</code>, 시그니처가 전부 <code>wrapper</code>의 것으로 바뀐다. 디버깅·문서화 툴이 오작동한다. 해결: <code>@functools.wraps(func)</code>로 원본 메타데이터 복사.</li>
+  <li><b>함수 객체 ≠ 호출 결과</b>: <code>collect(f1())</code>처럼 괄호를 붙이면 함수를 실행한 <em>결과</em>(보통 <code>None</code>)가 인자가 된다. <code>collect(f1)</code>처럼 괄호 없이 넘겨야 함수 객체 자체가 전달된다.</li>
+  <li><b>전역 상태 오염</b>: 본 노트북의 <code>registry</code>는 전역 리스트다. 실제 서비스에서 전역 상태는 테스트·병렬 실행에 위험하므로 모듈 레벨 객체·클래스 속성으로 감싸는 편이 안전하다.</li>
+  <li><b>적용 순서</b>: 데코레이터 여러 개를 쌓으면 <em>아래에서 위로</em> 적용된다. <code>@A</code> 위에 <code>@B</code>면 <code>B(A(func))</code> 순.</li>
+</ul>
+
+<h2 id="exercises">7. 자체 점검 문제</h2>
+<ol>
+  <li><code>@register</code>의 <code>return func</code>을 삭제하면 <code>f1()</code> 호출 시 무슨 일이 생길까? (힌트: <code>f1</code>의 최종 바인딩은 <code>register(f1)</code>의 반환값이다)</li>
+  <li>데코레이터를 쓰지 않고 동일한 기능을 만들되, 모듈 로드 시 자동 등록되는 코드를 작성하라. (힌트: 함수 정의 다음 줄에서 수동 호출)</li>
+  <li>위 "timing 데코레이터"에서 <code>@wraps(func)</code>를 제거하고 <code>slow_add.__name__</code>을 출력해 보라. 무엇이 찍히는가?</li>
+  <li>데코레이터 두 개(<code>@register</code>, <code>@timing</code>)를 함께 쓰려 한다. 위아래 어느 쪽에 <code>@register</code>를 둬야 레지스트리에 들어가는 "함수"가 타이밍이 측정되는 버전이 되는가?</li>
+</ol>
+
+<div class="callout tip"><b>한 줄로 기억</b>
+데코레이터 = "함수를 받아 함수를 돌려주는 함수". <code>@</code>는 <code>f = D(f)</code>의 별칭이다. 그 이상도 이하도 아니다.</div>
+
+<div class="footer">작성: 2026-04-17 · 출처 노트북: <code>06week/week6/01_decorator.ipynb</code></div>
+</div>
+</body></html>
