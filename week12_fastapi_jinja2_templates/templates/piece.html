@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+{% if piece %}
+  <h2>{{ piece.title }}</h2>
+  <p>Composer: {{ piece.composer }}</p>
+  <p>Period: {{ piece.period }}</p>
+  <p>Duration: {{ piece.duration }} minutes</p>
+{% else %}
+  <h2>Piece {{ piece_id }} not found</h2>
+{% endif %}
+{% endblock %}

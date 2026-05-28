@@ -1,0 +1,41 @@
+body {
+  margin: 0;
+  font-family: Georgia, serif;
+  background: #f8f6f0;
+  color: #24211c;
+}
+
+header {
+  padding: 24px;
+  background: #252018;
+  color: #f8f1df;
+}
+
+nav a {
+  color: #f0d18a;
+  margin-right: 16px;
+  text-decoration: none;
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.piece {
+  border: 1px solid #d5cab4;
+  padding: 16px;
+  background: #fffdf7;
+}
+
+.badge {
+  color: #7c4b00;
+  font-weight: 700;
+}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ playlist_name }}</h2>
+<section class="grid">
+  {% for piece in pieces %}
+  <article class="piece">
+    {% if piece.id == featured_id %}
+    <span class="badge">Featured</span>
+    {% endif %}
+    <h3 data-copy="{{ piece.title }}">{{ piece.title }}</h3>
+    <p>{{ piece.composer }} · {{ piece.period }}</p>
+    <a href="/piece/{{ piece.id }}">Detail</a>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}
