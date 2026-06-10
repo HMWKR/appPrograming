@@ -19,7 +19,7 @@
 | 8 | FAST API 사이트 실습코드(4-29) | `week08_0429_fastapi_practice` | `week08_0429_fastapi_practice_explained.ipynb` |
 | 9 | FastAPI 검증 모델 | `week09_fastapi_validation_models` | `week09_annotated_query_model_explained.ipynb` |
 | 10 | 머신러닝 웹서비스 | `week10_ml_web_service` | `week10_ml_fastapi_gradio_service_explained.ipynb` |
-| 11 | 와인 분류 대시보드 | `week11_wine_dashboard_service` | `week11_wine_dashboard_service_explained.ipynb` |
+| 11 | 0515 Wine Classification Dashboard | `week11_0515_wine_dashboard_service` | `week11_0515_wine_dashboard_service_explained.ipynb` |
 | 12 | FastAPI와 Jinja2 템플릿 | `week12_fastapi_jinja2_templates` | `week12_fastapi_jinja2_templates_explained.ipynb` |
 
 ## 작성 및 검증 흐름
